@@ -1,0 +1,175 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>60</daysToKeep>
+        <numToKeep>-1</numToKeep>
+        <artifactDaysToKeep>-1</artifactDaysToKeep>
+        <artifactNumToKeep>-1</artifactNumToKeep>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+    <com.chikli.hudson.plugin.naginator.NaginatorOptOutProperty plugin="naginator@1.17.2">
+      <optOut>false</optOut>
+    </com.chikli.hudson.plugin.naginator.NaginatorOptOutProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>REPO_TOP_DIR</name>
+          <description>specify the top directory of the repo&apos;s. for example debug to update
+/ansysdev/git/debug/...</description>
+          <defaultValue>needOne</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <scm class="hudson.scm.NullSCM"/>
+  <assignedNode>conbld8a</assignedNode>
+  <canRoam>false</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>true</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>#!d:\cygwin\bin\bash
+
+if [ &quot;${REPO_TOP_DIR}&quot; == &quot;needOne&quot; ]; then
+  echo &quot;ERROR: need a repo top directory, current is ${REPO_TOP_DIR}&quot;
+  exit 1
+fi
+
+if ! cd ${REPO_TOP_DIR}; then
+  echo &quot;ERROR: cannot cd to $REPO_TOP_DIR&quot;
+  exit 2
+fi
+  
+echo &quot;updating git repo: ${REPO_TOP_DIR}&quot;
+echo &quot;pwd: &quot;
+pwd
+whoami
+# sleep for a bit to allow the other test servers to update so we don&apos;t
+# overload the crappy tfs and artifactory servers
+sleep 10m
+i=&quot;0&quot;
+while [ $i -lt 5 ] ; do
+	((i++))
+    echo &quot;INFO: attempt number $i&quot;
+    echo &quot;Killing any zombie git exe&apos;s&quot;
+    if ! ~/scripts/killProcessByNameRegex -k &quot;^git-.*exe|^git\.exe|^ssh\.exe&quot;; then
+        echo &quot;Warning: killProcessByNameRegex failed...&quot;
+    fi
+    echo &quot;Killing zombie rm processes&quot;
+    if ! ~/scripts/killProcessByNameRegex -k &quot;^rm\.exe&quot;; then
+        echo &quot;Warning: killProcessByNameRegex failed...&quot;
+    fi
+    if ! cd $REPO_TOP_DIR; then
+        echo &quot;ERROR: cannot cd to $REPO_TOP_DIR&quot;
+        exit 2
+    fi
+    if ~/gitScripts/gitClean.pl; then
+        echo &quot;git clean completed successfully&quot;
+        if [ -d 3rdparty ]; then
+            echo &quot;Removing 3rdparty...&quot;
+            rm -r 3rdparty
+            echo &quot;Removed 3rdparty...&quot;
+        fi
+        # need to limit the parallel stuff as the network doesn&apos;t even reach
+        # the level of crap. same goes for the POS TFS servers....
+        if ~/gitScripts/gitUpdate --noxmessage --no3rdparty -j 3; then                                      
+            echo &quot;git update completed successfully after $i attempt(s)&quot;                                      
+            i=&quot;99&quot;                                                                        
+        fi                                                                                
+    fi
+    if [ $i -lt 50 ]; then
+        echo &quot;git update attempt number $i FAILED&quot;
+        ~/scripts/killProcessByNameRegex -k &quot;^git-.*exe|^git\.exe|^ssh\.exe&quot;
+        ~/scripts/killProcessByNameRegex -k &quot;^rm\.exe&quot;
+        sleep 10
+    fi
+done
+if [ $i -lt 50 ]; then
+    echo &quot;FAIL: update failed $i times&quot;
+    exit 1
+else
+    echo &quot;SUCCESS: update was successful&quot;
+fi
+</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.plugins.emailext.ExtendedEmailPublisher plugin="email-ext@2.61">
+      <recipientList>$DEFAULT_RECIPIENTS</recipientList>
+      <configuredTriggers>
+        <hudson.plugins.emailext.plugins.trigger.SuccessTrigger>
+          <email>
+            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+            <body>$PROJECT_DEFAULT_CONTENT</body>
+            <recipientProviders>
+              <hudson.plugins.emailext.plugins.recipients.ListRecipientProvider/>
+            </recipientProviders>
+            <attachmentsPattern></attachmentsPattern>
+            <attachBuildLog>false</attachBuildLog>
+            <compressBuildLog>false</compressBuildLog>
+            <contentType>project</contentType>
+          </email>
+        </hudson.plugins.emailext.plugins.trigger.SuccessTrigger>
+        <hudson.plugins.emailext.plugins.trigger.FailureTrigger>
+          <email>
+            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+            <body>$PROJECT_DEFAULT_CONTENT</body>
+            <recipientProviders>
+              <hudson.plugins.emailext.plugins.recipients.ListRecipientProvider/>
+            </recipientProviders>
+            <attachmentsPattern></attachmentsPattern>
+            <attachBuildLog>false</attachBuildLog>
+            <compressBuildLog>false</compressBuildLog>
+            <replyTo>$PROJECT_DEFAULT_REPLYTO</replyTo>
+            <contentType>project</contentType>
+          </email>
+        </hudson.plugins.emailext.plugins.trigger.FailureTrigger>
+      </configuredTriggers>
+      <contentType>default</contentType>
+      <defaultSubject>$REPO_TOP_DIR $DEFAULT_SUBJECT</defaultSubject>
+      <defaultContent>$REPO_TOP_DIR $DEFAULT_CONTENT</defaultContent>
+      <attachmentsPattern></attachmentsPattern>
+      <presendScript></presendScript>
+      <postsendScript></postsendScript>
+      <attachBuildLog>true</attachBuildLog>
+      <compressBuildLog>true</compressBuildLog>
+      <replyTo>$DEFAULT_REPLYTO</replyTo>
+      <saveOutput>false</saveOutput>
+      <disabled>false</disabled>
+    </hudson.plugins.emailext.ExtendedEmailPublisher>
+    <hudson.plugins.parameterizedtrigger.BuildTrigger plugin="parameterized-trigger@2.35.2">
+      <configs>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.NodeParameters/>
+            <hudson.plugins.parameterizedtrigger.CurrentBuildParameters/>
+          </configs>
+          <projects>UpdateConbld8a3rdparty</projects>
+          <condition>UNSTABLE_OR_BETTER</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+      </configs>
+    </hudson.plugins.parameterizedtrigger.BuildTrigger>
+  </publishers>
+  <buildWrappers>
+    <hudson.plugins.build__timeout.BuildTimeoutWrapper plugin="build-timeout@1.19">
+      <strategy class="hudson.plugins.build_timeout.impl.AbsoluteTimeOutStrategy">
+        <timeoutMinutes>120</timeoutMinutes>
+      </strategy>
+      <operationList>
+        <hudson.plugins.build__timeout.operations.FailOperation/>
+      </operationList>
+    </hudson.plugins.build__timeout.BuildTimeoutWrapper>
+    <hudson.plugins.timestamper.TimestamperBuildWrapper plugin="timestamper@1.8.9"/>
+  </buildWrappers>
+</project>

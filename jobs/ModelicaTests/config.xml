@@ -1,0 +1,186 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description>Run the modelica compiler automated tests...</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>60</daysToKeep>
+        <numToKeep>-1</numToKeep>
+        <artifactDaysToKeep>-1</artifactDaysToKeep>
+        <artifactNumToKeep>-1</artifactNumToKeep>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+    <com.chikli.hudson.plugin.naginator.NaginatorOptOutProperty plugin="naginator@1.17">
+      <optOut>false</optOut>
+    </com.chikli.hudson.plugin.naginator.NaginatorOptOutProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>VERSION</name>
+          <description>debug, release ...</description>
+          <defaultValue>needOne</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>VISUALSTUDIOVERSION</name>
+          <description>right now there is just vs12 to set vs2012. empty for vs2010</description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>true</concurrentBuild>
+  <customWorkspace>d:\ansysdev\git\${VISUALSTUDIOVERSION}${VERSION}</customWorkspace>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>#!d:\cygwin\bin\bash
+
+if [ &quot;${VERSION}&quot; == &quot;needOne&quot; ]; then
+  echo &quot;ERROR: need a version, current is ${VERSION}&quot;
+  exit 3
+fi
+
+
+echo &quot;testing ${VERSION}&quot;
+pwd
+currDir=`pwd`
+
+testdir=&quot;${currDir}/simplorer/Tests/ModelicaInterface&quot;
+if ! pushd $testdir &gt; /dev/null; then
+   echo &quot;ERROR: unable to cd to $testdir&quot;
+   exit 1
+fi
+
+echo &quot;Killing any zombie ModelicaCompilerJCC processes&quot;
+if ! ~/scripts/killProcessByNameRegex -k ModelicaCompilerJCC; then
+   echo &quot;WARNING: killProcessByNameRegex failed&quot;
+fi
+if ! perl ./runModelicaTests.pl -t ${VERSION} -j 4 --noxmessage; then
+   echo &quot;...FAILURE...&quot;
+   echo
+   echo -n &quot;Tests failed on: &quot;
+   hostname
+   echo &quot;Running version: ${VERSION}&quot;
+   echo
+   echo &quot;Copying the test area to /d/ansysdev/failedTests/${BUILD_NUMBER}&quot;
+   # copy the failed build area
+   if [ ! -d /cygdrive/d/ansysdev/failedTests ]; then
+     if ! pushd /cygdrive/d/ansysdev &gt; /dev/null; then
+       echo &quot;ERROR: could not cd to /cygdrive/d/ansysdev&quot;
+       exit 3
+     fi
+     if ! mkdir failedTests &gt; /dev/null; then
+       echo &quot;ERROR: unable to create directory failedTests&quot;
+       exit 4
+     fi
+     if ! pushd failedTests &gt; /dev/null; then
+       echo &quot;ERROR: could not cd to failedTests after creation&quot;
+       exit 5
+     fi
+   fi
+   if ! pushd /cygdrive/d/ansysdev/failedTests &gt; /dev/null; then
+     echo &quot;ERROR: could not cd to /cygdrive/d/ansysdev/failedTests&quot;
+     exit 6
+   fi
+   if ! mkdir $BUILD_NUMBER; then
+      echo &quot;ERROR: could not create build directory $BUILD_NUMBER&quot;
+      exit 7
+   fi
+   if ! pushd $BUILD_NUMBER &gt; /dev/null; then
+      echo &quot;ERROR: could not cd to $BUILD_NUMBER&quot;
+      exit 8
+   fi
+   if ! cp -R ${currDir}/simplorer/Tests/ModelicaInterface .; then
+      echo &quot;ERROR: failed to copy $currDir tests to $BUILD_NUMBER&quot;
+      exit 9
+   fi
+   exit 1
+fi
+echo &quot;Test completed successfully&quot;
+exit 0
+</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.plugins.emailext.ExtendedEmailPublisher plugin="email-ext@2.42">
+      <recipientList>$DEFAULT_RECIPIENTS</recipientList>
+      <configuredTriggers>
+        <hudson.plugins.emailext.plugins.trigger.SuccessTrigger>
+          <email>
+            <recipientList></recipientList>
+            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+            <body>$PROJECT_DEFAULT_CONTENT</body>
+            <recipientProviders>
+              <hudson.plugins.emailext.plugins.recipients.ListRecipientProvider/>
+            </recipientProviders>
+            <attachmentsPattern></attachmentsPattern>
+            <attachBuildLog>false</attachBuildLog>
+            <compressBuildLog>false</compressBuildLog>
+            <replyTo></replyTo>
+            <contentType>project</contentType>
+          </email>
+        </hudson.plugins.emailext.plugins.trigger.SuccessTrigger>
+        <hudson.plugins.emailext.plugins.trigger.FailureTrigger>
+          <email>
+            <recipientList>william.schilp@ansys.com</recipientList>
+            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+            <body>$PROJECT_DEFAULT_CONTENT</body>
+            <recipientProviders>
+              <hudson.plugins.emailext.plugins.recipients.ListRecipientProvider/>
+            </recipientProviders>
+            <attachmentsPattern></attachmentsPattern>
+            <attachBuildLog>false</attachBuildLog>
+            <compressBuildLog>false</compressBuildLog>
+            <replyTo></replyTo>
+            <contentType>project</contentType>
+          </email>
+        </hudson.plugins.emailext.plugins.trigger.FailureTrigger>
+        <hudson.plugins.emailext.plugins.trigger.FixedTrigger>
+          <email>
+            <recipientList>william.schilp@ansys.com</recipientList>
+            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+            <body>$PROJECT_DEFAULT_CONTENT</body>
+            <recipientProviders>
+              <hudson.plugins.emailext.plugins.recipients.ListRecipientProvider/>
+            </recipientProviders>
+            <attachmentsPattern></attachmentsPattern>
+            <attachBuildLog>false</attachBuildLog>
+            <compressBuildLog>false</compressBuildLog>
+            <replyTo></replyTo>
+            <contentType>project</contentType>
+          </email>
+        </hudson.plugins.emailext.plugins.trigger.FixedTrigger>
+      </configuredTriggers>
+      <contentType>default</contentType>
+      <defaultSubject>$VERSION $DEFAULT_SUBJECT</defaultSubject>
+      <defaultContent>$VERSION
+$DEFAULT_CONTENT</defaultContent>
+      <attachmentsPattern></attachmentsPattern>
+      <presendScript></presendScript>
+      <postsendScript></postsendScript>
+      <attachBuildLog>false</attachBuildLog>
+      <compressBuildLog>false</compressBuildLog>
+      <replyTo>$DEFAULT_REPLYTO</replyTo>
+      <saveOutput>false</saveOutput>
+      <disabled>false</disabled>
+    </hudson.plugins.emailext.ExtendedEmailPublisher>
+  </publishers>
+  <buildWrappers>
+    <hudson.plugins.build__timeout.BuildTimeoutWrapper plugin="build-timeout@1.16">
+      <strategy class="hudson.plugins.build_timeout.impl.AbsoluteTimeOutStrategy">
+        <timeoutMinutes>60</timeoutMinutes>
+      </strategy>
+      <operationList>
+        <hudson.plugins.build__timeout.operations.FailOperation/>
+      </operationList>
+    </hudson.plugins.build__timeout.BuildTimeoutWrapper>
+    <hudson.plugins.timestamper.TimestamperBuildWrapper plugin="timestamper@1.8.2"/>
+  </buildWrappers>
+</project>
